@@ -137,9 +137,12 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = `/${customDomain.user.username}`;
     
-    // Create response with rewrite
+    // Create response with rewrite, allowing both HTTP and HTTPS
     const response = NextResponse.rewrite(url);
+    
+    // Remove any headers that might force HTTPS
     response.headers.delete('Strict-Transport-Security');
+    response.headers.delete('X-Forwarded-Proto');
     
     return response;
 
