@@ -62,7 +62,15 @@ const utils = {
    * Used for static assets and API routes that don't require domain checks
    */
   isPublicPath(pathname: string): boolean {
-    return appConfig.domains.public.paths.some(path => pathname.startsWith(path));
+    return [
+      '/api', 
+      '/_next', 
+      '/images', 
+      '/fonts', 
+      '/favicon.ico',
+      '/404',
+      '/500'
+    ].some(path => pathname.startsWith(path));
   },
 
   /**
@@ -90,9 +98,9 @@ const utils = {
 export async function middleware(request: NextRequest) {
   // Get hostname and normalize it
   const hostname = request.headers.get('host') || '';
-  const normalizedHost = hostname.split(':')[0].toLowerCase();
+  const normalizedHost = utils.normalizeHostname(hostname);
 
-  // Skip middleware for public paths and API routes
+  // Skip middleware for public paths and error pages
   if (utils.isPublicPath(request.nextUrl.pathname)) {
     return NextResponse.next();
   }
@@ -103,7 +111,7 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    // Look up custom domain directly from database
+    // Look up custom domain
     const customDomain = await prisma.customDomain.findFirst({
       where: {
         domain: normalizedHost,
@@ -111,45 +119,29 @@ export async function middleware(request: NextRequest) {
       },
       include: {
         user: {
-          select: {
-            username: true,
-          },
+          select: { username: true },
         },
       },
     });
 
     if (!customDomain?.user?.username) {
-      console.error('[Middleware] Domain not found:', normalizedHost);
-      return NextResponse.redirect(new URL('/404', request.url));
+      // Instead of redirecting to /404, return a 404 response
+      return new NextResponse('Domain not found', { status: 404 });
     }
 
-    // Rewrite to the user's page
+    // Simple rewrite to user's page
     const url = request.nextUrl.clone();
-    url.pathname = `/${customDomain.user.username}${url.pathname}`;
-
-    console.log('[Middleware] Rewriting custom domain:', {
-      from: request.nextUrl.pathname,
-      to: url.pathname,
-      domain: normalizedHost,
-    });
-
+    url.pathname = `/${customDomain.user.username}`;
+    
     return NextResponse.rewrite(url);
 
   } catch (error) {
     console.error('[Middleware] Error:', error);
-    return NextResponse.redirect(new URL('/500', request.url));
+    // Instead of redirecting to /500, return a 500 response
+    return new NextResponse('Internal Server Error', { status: 500 });
   }
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except:
-     * 1. /api/ routes
-     * 2. /_next/ (Next.js internals)
-     * 3. /images/ (public files)
-     * 4. /favicon.ico, /sitemap.xml (public files)
-     */
-    '/((?!api/|_next/|images/|favicon.ico|sitemap.xml).*)',
-  ],
+  matcher: ['/((?!api/|_next/|images/|favicon.ico).*)'],
 };
