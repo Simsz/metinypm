@@ -100,31 +100,17 @@ export async function middleware(request: NextRequest) {
   const hostname = request.headers.get('host') || '';
   const normalizedHost = utils.normalizeHostname(hostname);
 
-  // Detailed request logging
-  console.log('[Middleware] Incoming Request:', {
-    host: hostname,
-    normalizedHost,
-    protocol: request.nextUrl.protocol,
-    pathname: request.nextUrl.pathname,
-    headers: Object.fromEntries(request.headers.entries()),
-    timestamp: new Date().toISOString()
-  });
-
   // Skip middleware for public paths and error pages
   if (utils.isPublicPath(request.nextUrl.pathname)) {
-    console.log('[Middleware] Skipping public path:', request.nextUrl.pathname);
     return NextResponse.next();
   }
 
   // Handle root domain and subdomains
   if (normalizedHost === 'tiny.pm' || normalizedHost.endsWith('.tiny.pm')) {
-    console.log('[Middleware] Handling root domain or subdomain:', normalizedHost);
     return NextResponse.next();
   }
 
   try {
-    console.log('[Middleware] Looking up custom domain:', normalizedHost);
-    
     // Look up custom domain
     const customDomain = await prisma.customDomain.findFirst({
       where: {
@@ -138,16 +124,8 @@ export async function middleware(request: NextRequest) {
       },
     });
 
-    console.log('[Middleware] Domain lookup result:', {
-      domain: normalizedHost,
-      found: !!customDomain,
-      username: customDomain?.user?.username,
-      status: customDomain?.status
-    });
-
     if (!customDomain?.user?.username) {
-      console.log('[Middleware] Domain not found or inactive:', normalizedHost);
-      return new NextResponse('Domain not found', { 
+      return new NextResponse(`Domain not found: ${normalizedHost}`, { 
         status: 404,
         headers: {
           'Content-Type': 'text/plain'
@@ -159,8 +137,6 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = `/${customDomain.user.username}`;
     
-    console.log('[Middleware] Rewriting to:', url.pathname);
-
     // Create response with rewrite
     const response = NextResponse.rewrite(url);
     response.headers.delete('Strict-Transport-Security');
@@ -168,18 +144,24 @@ export async function middleware(request: NextRequest) {
     return response;
 
   } catch (error) {
-    // Detailed error logging
-    console.error('[Middleware] Error:', {
-      error: error instanceof Error ? {
-        message: error.message,
-        name: error.name,
-        stack: error.stack,
-      } : error,
-      host: normalizedHost,
-      timestamp: new Date().toISOString()
-    });
+    const errorDetails = `
+Error Details:
+-------------
+Message: ${error instanceof Error ? error.message : 'Unknown error'}
+Name: ${error instanceof Error ? error.name : 'Unknown'}
+Stack: ${error instanceof Error ? error.stack : 'No stack trace'}
 
-    return new NextResponse('Internal Server Error', { 
+Request Details:
+---------------
+Host: ${normalizedHost}
+Path: ${request.nextUrl.pathname}
+Protocol: ${request.nextUrl.protocol}
+Headers: ${JSON.stringify(Object.fromEntries(request.headers.entries()), null, 2)}
+
+Timestamp: ${new Date().toISOString()}
+    `;
+
+    return new NextResponse(errorDetails, { 
       status: 500,
       headers: {
         'Content-Type': 'text/plain'
