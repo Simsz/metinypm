@@ -1,9 +1,6 @@
 // middleware.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
 
 /**
  * Core application configuration that handles:
@@ -111,40 +108,43 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    // Look up custom domain
-    const customDomain = await prisma.customDomain.findFirst({
-      where: {
-        domain: normalizedHost,
-        status: 'ACTIVE',
-      },
-      include: {
-        user: {
-          select: { username: true },
-        },
-      },
+    // Use the verify endpoint instead of direct Prisma access
+    const verifyUrl = new URL('/api/domains/verify', request.nextUrl.origin);
+    verifyUrl.searchParams.set('domain', normalizedHost);
+    
+    const response = await fetch(verifyUrl, {
+      headers: {
+        host: normalizedHost,
+        'x-real-ip': request.headers.get('x-real-ip') || '',
+        'x-forwarded-for': request.headers.get('x-forwarded-for') || '',
+      }
     });
 
-    if (!customDomain?.user?.username) {
+    if (!response.ok) {
+      throw new Error(`Domain verification failed: ${await response.text()}`);
+    }
+
+    const data = await response.json();
+    
+    if (!data.username) {
       return new NextResponse(`Domain not found: ${normalizedHost}`, { 
         status: 404,
-        headers: {
-          'Content-Type': 'text/plain'
-        }
+        headers: { 'Content-Type': 'text/plain' }
       });
     }
 
-    // Simple rewrite to user's page
+    // Rewrite to user's page
     const url = request.nextUrl.clone();
-    url.pathname = `/${customDomain.user.username}`;
+    url.pathname = `/${data.username}`;
     
-    // Create response with rewrite, allowing both HTTP and HTTPS
-    const response = NextResponse.rewrite(url);
+    // Create response with rewrite
+    const response2 = NextResponse.rewrite(url);
     
     // Remove any headers that might force HTTPS
-    response.headers.delete('Strict-Transport-Security');
-    response.headers.delete('X-Forwarded-Proto');
+    response2.headers.delete('Strict-Transport-Security');
+    response2.headers.delete('X-Forwarded-Proto');
     
-    return response;
+    return response2;
 
   } catch (error) {
     const errorDetails = `
@@ -166,9 +166,7 @@ Timestamp: ${new Date().toISOString()}
 
     return new NextResponse(errorDetails, { 
       status: 500,
-      headers: {
-        'Content-Type': 'text/plain'
-      }
+      headers: { 'Content-Type': 'text/plain' }
     });
   }
 }

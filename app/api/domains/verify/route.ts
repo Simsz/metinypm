@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
   const domain = searchParams.get('domain');
 
   if (!domain) {
-    return new NextResponse('no', { status: 200 });
+    return Response.json({ error: 'No domain provided' }, { status: 400 });
   }
 
   // Always allow development domains
@@ -26,26 +26,24 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Check custom domains
     const customDomain = await prisma.customDomain.findFirst({
       where: {
         domain,
-        status: 'ACTIVE', // Ensure the domain is verified and active
+        status: 'ACTIVE',
+      },
+      include: {
+        user: {
+          select: { username: true },
+        },
       },
     });
 
-    // Log verification attempts in development
-    if (process.env.NODE_ENV === 'development') {
-      console.log(
-        `Domain verification attempt for ${domain}: ${
-          customDomain ? 'Found' : 'Not Found'
-        }`
-      );
-    }
+    return Response.json({
+      username: customDomain?.user?.username || null
+    });
 
-    return new NextResponse(customDomain ? 'yes' : 'no', { status: 200 });
   } catch (error) {
     console.error('Domain verification error:', error);
-    return new NextResponse('no', { status: 200 });
+    return Response.json({ error: 'Verification failed' }, { status: 500 });
   }
 }
