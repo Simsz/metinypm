@@ -6,6 +6,11 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const domain = searchParams.get('domain');
 
+  console.log('[Domain Verify] Request:', {
+    domain,
+    headers: Object.fromEntries(request.headers.entries())
+  });
+
   if (!domain) {
     return Response.json({ error: 'No domain provided' }, { status: 400 });
   }
@@ -17,12 +22,12 @@ export async function GET(request: NextRequest) {
       domain.includes('127.0.0.1') ||
       domain.endsWith('.tiny.pm'))
   ) {
-    return new NextResponse('yes', { status: 200 });
+    return Response.json({ username: 'dev' });
   }
 
   // Allow the main domain and its subdomains
   if (domain === 'tiny.pm' || domain.endsWith('.tiny.pm')) {
-    return new NextResponse('yes', { status: 200 });
+    return Response.json({ username: 'root' });
   }
 
   try {
@@ -38,12 +43,21 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    console.log('[Domain Verify] Found domain:', {
+      domain,
+      found: !!customDomain,
+      username: customDomain?.user?.username
+    });
+
     return Response.json({
       username: customDomain?.user?.username || null
     });
 
   } catch (error) {
-    console.error('Domain verification error:', error);
-    return Response.json({ error: 'Verification failed' }, { status: 500 });
+    console.error('[Domain Verify] Error:', error);
+    return Response.json({ 
+      error: 'Verification failed',
+      details: process.env.NODE_ENV === 'development' ? error : undefined
+    }, { status: 500 });
   }
 }

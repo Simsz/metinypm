@@ -112,6 +112,11 @@ export async function middleware(request: NextRequest) {
     const verifyUrl = new URL('/api/domains/verify', request.nextUrl.origin);
     verifyUrl.searchParams.set('domain', normalizedHost);
     
+    console.log('[Middleware] Verifying domain:', {
+      domain: normalizedHost,
+      verifyUrl: verifyUrl.toString()
+    });
+
     const response = await fetch(verifyUrl, {
       headers: {
         host: normalizedHost,
@@ -120,12 +125,19 @@ export async function middleware(request: NextRequest) {
       }
     });
 
-    if (!response.ok) {
-      throw new Error(`Domain verification failed: ${await response.text()}`);
+    const responseText = await response.text();
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      console.error('[Middleware] Failed to parse response:', responseText);
+      throw new Error(`Invalid response from verification endpoint: ${responseText}`);
     }
 
-    const data = await response.json();
-    
+    if (!response.ok) {
+      throw new Error(`Domain verification failed: ${data.error || responseText}`);
+    }
+
     if (!data.username) {
       return new NextResponse(`Domain not found: ${normalizedHost}`, { 
         status: 404,
@@ -135,8 +147,14 @@ export async function middleware(request: NextRequest) {
 
     // Rewrite to user's page
     const url = request.nextUrl.clone();
-    url.pathname = `/${data.username}`;
+    url.pathname = `/${data.username}${request.nextUrl.pathname}`;
     
+    console.log('[Middleware] Rewriting to:', {
+      domain: normalizedHost,
+      username: data.username,
+      path: url.pathname
+    });
+
     // Create response with rewrite
     const response2 = NextResponse.rewrite(url);
     
