@@ -17,6 +17,24 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { CustomDomain, DomainStatus, Subscription } from '@prisma/client';
 
+function getEstimatedTime(domain: CustomDomain) {
+  if (domain.status === 'ACTIVE') return null;
+  
+  const timeSinceAttempt = domain.lastAttemptAt 
+    ? Date.now() - new Date(domain.lastAttemptAt).getTime() 
+    : 0;
+  const minutesSinceAttempt = Math.floor(timeSinceAttempt / (1000 * 60));
+  
+  // Most DNS changes propagate within 5-30 minutes
+  const estimate = {
+    min: 5,
+    max: 30,
+    remaining: Math.max(0, 30 - minutesSinceAttempt)
+  };
+  
+  return estimate;
+}
+
 export default function DomainsPage() {
   const { status } = useSession();
   const router = useRouter();
@@ -253,6 +271,10 @@ export default function DomainsPage() {
     );
   }
 
+  const hasVerifyingDomains = domains.some(
+    d => d.status === 'PENDING' || d.status === 'DNS_VERIFICATION'
+  );
+
   return (
     <div className="min-h-screen bg-[#FFCC00]">
       <div className="mx-auto max-w-4xl px-4 py-8">
@@ -282,6 +304,33 @@ export default function DomainsPage() {
         )}
 
         <div className="rounded-xl border-2 border-black bg-white p-6 shadow-lg">
+          {/* Verification Warning */}
+          {hasVerifyingDomains && (
+            <div className="mb-6 rounded-lg border-2 border-amber-200 bg-amber-50 p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="mt-0.5 h-5 w-5 text-amber-600" />
+                <div className="space-y-2">
+                  <h3 className="font-medium text-amber-800">
+                    Domain Verification in Progress
+                  </h3>
+                  <p className="text-sm text-amber-700">
+                    Please keep this page open while we verify your domain(s). DNS changes typically take 5-30 minutes to propagate across the internet.
+                  </p>
+                  {domains.map(domain => {
+                    const estimate = getEstimatedTime(domain);
+                    if (!estimate) return null;
+                    
+                    return (
+                      <p key={domain.id} className="text-sm text-amber-700">
+                        <strong>{domain.domain}:</strong> Up to {estimate.remaining} minutes remaining
+                      </p>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Add Domain Form */}
           <form onSubmit={addDomain} className="mb-8">
             <div className="flex gap-3">
@@ -355,7 +404,8 @@ export default function DomainsPage() {
             <div className="mt-8 rounded-lg bg-gray-50 p-4">
               <h3 className="mb-2 font-medium">DNS Configuration Instructions</h3>
               <p className="mb-4 text-sm text-gray-600">
-                To connect your domain, add the following DNS record to your domain provider:
+                To connect your domain, add the following DNS record to your domain provider.
+                This process typically takes 5-30 minutes to complete after adding the record.
               </p>
               <div className="overflow-x-auto rounded-lg border border-gray-200">
                 <table className="w-full text-sm">
