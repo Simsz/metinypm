@@ -100,24 +100,31 @@ export async function middleware(request: NextRequest) {
   const hostname = request.headers.get('host') || '';
   const normalizedHost = utils.normalizeHostname(hostname);
 
-  // Log request details for debugging
-  console.log('[Middleware] Request:', {
+  // Detailed request logging
+  console.log('[Middleware] Incoming Request:', {
     host: hostname,
+    normalizedHost,
     protocol: request.nextUrl.protocol,
-    pathname: request.nextUrl.pathname
+    pathname: request.nextUrl.pathname,
+    headers: Object.fromEntries(request.headers.entries()),
+    timestamp: new Date().toISOString()
   });
 
   // Skip middleware for public paths and error pages
   if (utils.isPublicPath(request.nextUrl.pathname)) {
+    console.log('[Middleware] Skipping public path:', request.nextUrl.pathname);
     return NextResponse.next();
   }
 
   // Handle root domain and subdomains
   if (normalizedHost === 'tiny.pm' || normalizedHost.endsWith('.tiny.pm')) {
+    console.log('[Middleware] Handling root domain or subdomain:', normalizedHost);
     return NextResponse.next();
   }
 
   try {
+    console.log('[Middleware] Looking up custom domain:', normalizedHost);
+    
     // Look up custom domain
     const customDomain = await prisma.customDomain.findFirst({
       where: {
@@ -131,25 +138,53 @@ export async function middleware(request: NextRequest) {
       },
     });
 
+    console.log('[Middleware] Domain lookup result:', {
+      domain: normalizedHost,
+      found: !!customDomain,
+      username: customDomain?.user?.username,
+      status: customDomain?.status
+    });
+
     if (!customDomain?.user?.username) {
-      return new NextResponse('Domain not found', { status: 404 });
+      console.log('[Middleware] Domain not found or inactive:', normalizedHost);
+      return new NextResponse('Domain not found', { 
+        status: 404,
+        headers: {
+          'Content-Type': 'text/plain'
+        }
+      });
     }
 
     // Simple rewrite to user's page
     const url = request.nextUrl.clone();
     url.pathname = `/${customDomain.user.username}`;
     
+    console.log('[Middleware] Rewriting to:', url.pathname);
+
     // Create response with rewrite
     const response = NextResponse.rewrite(url);
-    
-    // Ensure we're not forcing HTTPS
     response.headers.delete('Strict-Transport-Security');
     
     return response;
 
   } catch (error) {
-    console.error('[Middleware] Error:', error);
-    return new NextResponse('Internal Server Error', { status: 500 });
+    // Detailed error logging
+    console.error('[Middleware] Error:', {
+      error: error instanceof Error ? {
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+      } : error,
+      host: normalizedHost,
+      timestamp: new Date().toISOString()
+    });
+
+    return new NextResponse('Internal Server Error', { 
+      status: 500,
+      headers: {
+        'Content-Type': 'text/plain'
+      }
+    });
   }
 }
 
