@@ -125,12 +125,24 @@ export async function middleware(request: NextRequest) {
       }
     });
 
+    console.log('[Middleware] Verify response:', {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries())
+    });
+
     const responseText = await response.text();
+    console.log('[Middleware] Response text:', responseText);
+
     let data;
     try {
       data = JSON.parse(responseText);
+      console.log('[Middleware] Parsed response:', data);
     } catch (e) {
-      console.error('[Middleware] Failed to parse response:', responseText);
+      console.error('[Middleware] Failed to parse response:', {
+        text: responseText,
+        error: e
+      });
       throw new Error(`Invalid response from verification endpoint: ${responseText}`);
     }
 
