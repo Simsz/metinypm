@@ -1,6 +1,9 @@
 // middleware.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 /**
  * Core application configuration that handles:
@@ -85,98 +88,68 @@ const utils = {
 };
 
 export async function middleware(request: NextRequest) {
-  // Enhanced request logging
-  if (request.nextUrl.pathname.includes('/api/domains/verify')) {
-    console.log('[Middleware] Verification request:', {
-      method: request.method,
-      url: request.nextUrl.pathname,
-      headers: Object.fromEntries(request.headers),
-      cfRay: request.headers.get('cf-ray'),
-      timestamp: new Date().toISOString()
-    });
-  }
-
-  // API request logging
-  if (request.nextUrl.pathname.startsWith('/api/')) {
-    console.log('[API Request]', {
-      method: request.method,
-      path: request.nextUrl.pathname,
-      host: request.headers.get('host'),
-      timestamp: new Date().toISOString()
-    });
-  }
-
-  // SSL/TLS verification
-  const sslRedirect = utils.handleCloudflareSSL(request);
-  if (sslRedirect) return sslRedirect;
-
-  // Public path handling
-  if (utils.isPublicPath(request.nextUrl.pathname)) {
-    const response = NextResponse.next();
-    response.headers.set('Strict-Transport-Security', appConfig.security.ssl.headers.hsts);
-    return response;
-  }
-
+  // Get hostname and normalize it
   const hostname = request.headers.get('host') || '';
-  const normalizedHost = utils.normalizeHostname(hostname);
+  const normalizedHost = hostname.split(':')[0].toLowerCase();
 
-  // Development environment handling
-  if (process.env.NODE_ENV === 'development' && 
-      appConfig.domains.public.allowed.has(hostname)) {
+  // Skip middleware for public paths and API routes
+  if (utils.isPublicPath(request.nextUrl.pathname)) {
     return NextResponse.next();
   }
 
-  // Primary domain and subdomain handling
+  // Handle root domain and subdomains
   if (normalizedHost === 'tiny.pm' || normalizedHost.endsWith('.tiny.pm')) {
-    const response = NextResponse.next();
-    response.headers.set('Strict-Transport-Security', appConfig.security.ssl.headers.hsts);
-    return response;
+    return NextResponse.next();
   }
 
   try {
-    // Production custom domain verification
-    if (process.env.NODE_ENV === 'production') {
-      const verifyUrl = new URL('/api/domains/verify', request.nextUrl.origin);
-      const customDomain = await fetch(verifyUrl, {
-        headers: { 
-          host: normalizedHost,
-          'x-real-ip': request.headers.get('x-real-ip') || '',
-          'x-forwarded-for': request.headers.get('x-forwarded-for') || '',
-          'x-forwarded-proto': appConfig.security.ssl.headers.proto,
-        }
-      });
+    // Look up custom domain directly from database
+    const customDomain = await prisma.customDomain.findFirst({
+      where: {
+        domain: normalizedHost,
+        status: 'ACTIVE',
+      },
+      include: {
+        user: {
+          select: {
+            username: true,
+          },
+        },
+      },
+    });
 
-      if (!customDomain.ok) {
-        console.error('[Middleware] Domain verification failed:', {
-          domain: normalizedHost,
-          status: customDomain.status,
-          timestamp: new Date().toISOString()
-        });
-        return NextResponse.redirect(new URL('/404', request.url));
-      }
+    if (!customDomain?.user?.username) {
+      console.error('[Middleware] Domain not found:', normalizedHost);
+      return NextResponse.redirect(new URL('/404', request.url));
     }
 
-    // Set security headers for verified requests
-    const response = NextResponse.next();
-    response.headers.set('Strict-Transport-Security', appConfig.security.ssl.headers.hsts);
-    response.headers.set('X-Forwarded-Proto', appConfig.security.ssl.headers.proto);
-    return response;
+    // Rewrite to the user's page
+    const url = request.nextUrl.clone();
+    url.pathname = `/${customDomain.user.username}${url.pathname}`;
+
+    console.log('[Middleware] Rewriting custom domain:', {
+      from: request.nextUrl.pathname,
+      to: url.pathname,
+      domain: normalizedHost,
+    });
+
+    return NextResponse.rewrite(url);
 
   } catch (error) {
-    console.error('[Middleware] Error:', {
-      error,
-      domain: normalizedHost,
-      timestamp: new Date().toISOString()
-    });
+    console.error('[Middleware] Error:', error);
     return NextResponse.redirect(new URL('/500', request.url));
   }
 }
 
 export const config = {
   matcher: [
-    // Match all paths except static files
-    '/((?!_next|static|.*\\..*|favicon.ico).*)',
-    // Include API routes
-    '/api/:path*'
+    /*
+     * Match all request paths except:
+     * 1. /api/ routes
+     * 2. /_next/ (Next.js internals)
+     * 3. /images/ (public files)
+     * 4. /favicon.ico, /sitemap.xml (public files)
+     */
+    '/((?!api/|_next/|images/|favicon.ico|sitemap.xml).*)',
   ],
 };
