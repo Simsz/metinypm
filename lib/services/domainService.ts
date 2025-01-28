@@ -50,7 +50,7 @@ export class DomainService {
         // Generate verification code
         const verificationCode = await this.generateVerificationCode();
 
-        // Create domain record
+        // Create domain record with CNAME target
         return prisma.customDomain.create({
             data: {
                 domain,
@@ -58,6 +58,7 @@ export class DomainService {
                 verificationCode,
                 subscriptionId: user.subscription.id,
                 status: DomainStatus.PENDING,
+                cnameTarget: 'tiny.pm',
             }
         });
     }
