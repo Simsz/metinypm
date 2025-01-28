@@ -100,6 +100,13 @@ export async function middleware(request: NextRequest) {
   const hostname = request.headers.get('host') || '';
   const normalizedHost = utils.normalizeHostname(hostname);
 
+  // Log request details for debugging
+  console.log('[Middleware] Request:', {
+    host: hostname,
+    protocol: request.nextUrl.protocol,
+    pathname: request.nextUrl.pathname
+  });
+
   // Skip middleware for public paths and error pages
   if (utils.isPublicPath(request.nextUrl.pathname)) {
     return NextResponse.next();
@@ -125,7 +132,6 @@ export async function middleware(request: NextRequest) {
     });
 
     if (!customDomain?.user?.username) {
-      // Instead of redirecting to /404, return a 404 response
       return new NextResponse('Domain not found', { status: 404 });
     }
 
@@ -133,11 +139,16 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = `/${customDomain.user.username}`;
     
-    return NextResponse.rewrite(url);
+    // Create response with rewrite
+    const response = NextResponse.rewrite(url);
+    
+    // Ensure we're not forcing HTTPS
+    response.headers.delete('Strict-Transport-Security');
+    
+    return response;
 
   } catch (error) {
     console.error('[Middleware] Error:', error);
-    // Instead of redirecting to /500, return a 500 response
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 }
