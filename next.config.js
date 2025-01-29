@@ -30,6 +30,9 @@ const nextConfig = {
       },
     ],
   },
+  // Add crossOrigin configuration
+  crossOrigin: 'anonymous',
+  
   async headers() {
     return [
       {
@@ -45,23 +48,17 @@ const nextConfig = {
           }
         ],
       },
-      // Only apply additional headers to non-tiny.pm domains
       {
-        source: '/:path*',
-        has: [
-          {
-            type: 'host',
-            value: '(?!tiny\\.pm|localhost).*'
-          }
-        ],
+        // Special headers for static assets
+        source: '/_next/:path*',
         headers: [
           {
-            key: 'Access-Control-Allow-Methods',
-            value: 'GET, POST, OPTIONS'
+            key: 'Access-Control-Allow-Origin',
+            value: '*'
           },
           {
-            key: 'Access-Control-Allow-Headers',
-            value: 'X-Requested-With, Content-Type, Accept'
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable'
           }
         ],
       }

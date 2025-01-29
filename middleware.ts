@@ -15,11 +15,17 @@ function isCustomDomain(hostname: string): boolean {
 function rewriteToMainDomain(request: NextRequest, username: string | null = null) {
   const url = request.nextUrl.clone()
   
-  // If it's a static asset, rewrite to the main domain
+  // If it's a static asset, inject tiny.pm into the URL
   if (url.pathname.startsWith('/_next')) {
-    url.protocol = 'https'
-    url.host = 'tiny.pm'
-    return NextResponse.rewrite(url)
+    const response = NextResponse.next()
+    
+    // Rewrite the HTML to point static assets to tiny.pm
+    response.headers.set(
+      'Link',
+      `<https://tiny.pm${url.pathname}>; rel=preload; as=${getAssetType(url.pathname)}`
+    )
+    
+    return response
   }
 
   // For other requests, rewrite to the user's path if username is provided
@@ -27,9 +33,22 @@ function rewriteToMainDomain(request: NextRequest, username: string | null = nul
     url.pathname = `/${username}${url.pathname}`
   }
 
-  return NextResponse.rewrite(url)
+  const response = NextResponse.rewrite(url)
+
+  // Add header to tell the client to load assets from tiny.pm
+  response.headers.set('X-Asset-Domain', 'https://tiny.pm')
+
+  return response
 }
- 
+
+function getAssetType(pathname: string): string {
+  if (pathname.endsWith('.js')) return 'script'
+  if (pathname.endsWith('.css')) return 'style'
+  if (pathname.endsWith('.woff') || pathname.endsWith('.woff2')) return 'font'
+  if (pathname.endsWith('.png') || pathname.endsWith('.jpg') || pathname.endsWith('.jpeg') || pathname.endsWith('.gif') || pathname.endsWith('.webp')) return 'image'
+  return 'fetch'
+}
+
 export async function middleware(request: NextRequest) {
   // Get hostname (e.g. links.simstest.xyz)
   const hostname = request.headers.get('host') || ''
@@ -41,11 +60,12 @@ export async function middleware(request: NextRequest) {
 
   const normalizedHost = hostname.split(':')[0].toLowerCase()
 
-  // Handle static assets for custom domains
-  if (request.nextUrl.pathname.startsWith('/_next') ||
-      request.nextUrl.pathname.startsWith('/images') ||
-      request.nextUrl.pathname.startsWith('/fonts')) {
-    return rewriteToMainDomain(request)
+  // For static assets on custom domains, redirect to tiny.pm
+  if (request.nextUrl.pathname.startsWith('/_next')) {
+    const url = new URL(request.url)
+    url.protocol = 'https'
+    url.host = 'tiny.pm'
+    return NextResponse.redirect(url)
   }
 
   // Skip middleware for api routes, etc
@@ -118,7 +138,23 @@ export async function middleware(request: NextRequest) {
       path: `/${data.username}${request.nextUrl.pathname}`
     })
 
-    return rewriteToMainDomain(request, data.username)
+    // Create base response
+    const url = request.nextUrl.clone()
+    url.pathname = `/${data.username}${request.nextUrl.pathname}`
+    
+    const rewriteResponse = NextResponse.rewrite(url)
+    
+    // Add header to ensure assets are loaded from tiny.pm
+    rewriteResponse.headers.set('X-Use-Asset-Prefix', 'https://tiny.pm')
+    
+    // Add security headers
+    rewriteResponse.headers.set('X-Frame-Options', 'SAMEORIGIN')
+    rewriteResponse.headers.set(
+      'Content-Security-Policy',
+      "default-src 'self' https://tiny.pm; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://tiny.pm; style-src 'self' 'unsafe-inline' https://tiny.pm; font-src 'self' https://tiny.pm; img-src 'self' data: https://tiny.pm https://*.googleusercontent.com https://avatars.githubusercontent.com;"
+    )
+
+    return rewriteResponse
 
   } catch (error) {
     console.error('[Middleware] Error:', error)
@@ -129,7 +165,16 @@ export async function middleware(request: NextRequest) {
   }
 }
 
-// Configure middleware matches (include _next now)
+// Configure middleware matches
 export const config = {
-  matcher: ['/((?!api/|favicon.ico).*)']
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+  ],
 }
