@@ -1,4 +1,4 @@
-// app/api/verify-domain/route.ts
+// app/api/domains/verify/route.ts
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 
@@ -19,28 +19,31 @@ export async function GET(request: NextRequest) {
       return Response.json({ error: 'No domain provided' }, { status: 400 });
     }
 
+    // Normalize domain
+    const normalizedDomain = domain.toLowerCase().trim();
+
     // Always allow development domains
     if (
       process.env.NODE_ENV === 'development' &&
-      (domain.includes('localhost') ||
-        domain.includes('127.0.0.1') ||
-        domain.endsWith('.tiny.pm'))
+      (normalizedDomain.includes('localhost') ||
+        normalizedDomain.includes('127.0.0.1') ||
+        normalizedDomain.endsWith('.tiny.pm'))
     ) {
-      console.log('[Domain Verify] Development domain allowed:', domain);
+      console.log('[Domain Verify] Development domain allowed:', normalizedDomain);
       return Response.json({ username: 'dev' });
     }
 
     // Allow the main domain and its subdomains
-    if (domain === 'tiny.pm' || domain.endsWith('.tiny.pm')) {
-      console.log('[Domain Verify] Main domain allowed:', domain);
+    if (normalizedDomain === 'tiny.pm' || normalizedDomain.endsWith('.tiny.pm')) {
+      console.log('[Domain Verify] Main domain allowed:', normalizedDomain);
       return Response.json({ username: 'root' });
     }
 
-    console.log('[Domain Verify] Looking up domain in database:', domain);
+    console.log('[Domain Verify] Looking up domain in database:', normalizedDomain);
     
     const customDomain = await prisma.customDomain.findFirst({
       where: {
-        domain,
+        domain: normalizedDomain,
         status: 'ACTIVE',
       },
       include: {
@@ -51,14 +54,18 @@ export async function GET(request: NextRequest) {
     });
 
     console.log('[Domain Verify] Database result:', {
-      domain,
+      domain: normalizedDomain,
       found: !!customDomain,
       username: customDomain?.user?.username,
       status: customDomain?.status
     });
 
+    if (!customDomain || !customDomain.user?.username) {
+      return Response.json({ error: 'Domain not found' }, { status: 404 });
+    }
+
     return Response.json({
-      username: customDomain?.user?.username || null
+      username: customDomain.user.username
     });
 
   } catch (error) {
@@ -68,7 +75,6 @@ export async function GET(request: NextRequest) {
       message: error instanceof Error ? error.message : 'Unknown error'
     });
 
-    // Return a more detailed error response
     return Response.json({ 
       error: 'Verification failed',
       message: error instanceof Error ? error.message : 'Unknown error',
