@@ -1,86 +1,101 @@
-// app/api/domains/verify/route.ts
-import { NextRequest } from 'next/server';
-import prisma from '@/lib/prisma';
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+ 
+// This function can be marked `async` if using `await` inside
+export async function middleware(request: NextRequest) {
+  // Get hostname (e.g. links.simstest.xyz)
+  const hostname = request.headers.get('host') || ''
+  const normalizedHost = hostname.split(':')[0].toLowerCase()
 
-export async function GET(request: NextRequest) {
+  // Skip middleware for static files, api routes, etc
+  if (request.nextUrl.pathname.startsWith('/api') || 
+      request.nextUrl.pathname.startsWith('/_next') ||
+      request.nextUrl.pathname.startsWith('/images') ||
+      request.nextUrl.pathname.startsWith('/fonts') ||
+      request.nextUrl.pathname.startsWith('/favicon.ico')) {
+    return NextResponse.next()
+  }
+
+  // Handle root domain and subdomains
+  if (normalizedHost === 'tiny.pm' || normalizedHost.endsWith('.tiny.pm')) {
+    return NextResponse.next()
+  }
+
+  // For custom domains, verify and rewrite
   try {
-    const { searchParams } = new URL(request.url);
-    const domain = searchParams.get('domain');
+    console.log('[Middleware] Processing request:', {
+      host: hostname,
+      normalizedHost,
+      path: request.nextUrl.pathname,
+      method: request.method
+    })
 
-    console.log('[Domain Verify] Request:', {
-      url: request.url,
-      domain,
-      method: request.method,
-      headers: Object.fromEntries(request.headers.entries())
-    });
-
-    if (!domain) {
-      console.log('[Domain Verify] No domain provided');
-      return Response.json({ error: 'No domain provided' }, { status: 400 });
-    }
-
-    // Normalize domain
-    const normalizedDomain = domain.toLowerCase().trim();
-
-    // Always allow development domains
-    if (
-      process.env.NODE_ENV === 'development' &&
-      (normalizedDomain.includes('localhost') ||
-        normalizedDomain.includes('127.0.0.1') ||
-        normalizedDomain.endsWith('.tiny.pm'))
-    ) {
-      console.log('[Domain Verify] Development domain allowed:', normalizedDomain);
-      return Response.json({ username: 'dev' });
-    }
-
-    // Allow the main domain and its subdomains
-    if (normalizedDomain === 'tiny.pm' || normalizedDomain.endsWith('.tiny.pm')) {
-      console.log('[Domain Verify] Main domain allowed:', normalizedDomain);
-      return Response.json({ username: 'root' });
-    }
-
-    console.log('[Domain Verify] Looking up domain in database:', normalizedDomain);
+    const verifyUrl = new URL('/api/domains/verify', request.nextUrl.origin)
+    verifyUrl.searchParams.set('domain', normalizedHost)
     
-    const customDomain = await prisma.customDomain.findFirst({
-      where: {
-        domain: normalizedDomain,
-        status: 'ACTIVE',
-      },
-      include: {
-        user: {
-          select: { username: true },
-        },
-      },
-    });
+    console.log('[Middleware] Verifying domain:', {
+      domain: normalizedHost,
+      verifyUrl: verifyUrl.toString()
+    })
 
-    console.log('[Domain Verify] Database result:', {
-      domain: normalizedDomain,
-      found: !!customDomain,
-      username: customDomain?.user?.username,
-      status: customDomain?.status
-    });
+    // Fetch the verification endpoint
+    const response = await fetch(verifyUrl, {
+      headers: {
+        'host': normalizedHost,
+        'x-real-ip': request.headers.get('x-real-ip') || '',
+        'x-forwarded-for': request.headers.get('x-forwarded-for') || '',
+        'x-forwarded-proto': request.headers.get('x-forwarded-proto') || 'http',
+      }
+    })
 
-    if (!customDomain?.user?.username) {
-      return Response.json(
-        { error: 'Domain not found' },
-        { status: 404 }
-      );
+    if (!response.ok) {
+      const error = await response.text()
+      console.error('[Middleware] Verification failed:', {
+        status: response.status,
+        error
+      })
+      
+      if (response.status === 404) {
+        return new NextResponse('Domain not found', { 
+          status: 404,
+          headers: { 'Content-Type': 'text/plain' }
+        })
+      }
+      
+      throw new Error(`Domain verification failed: ${error}`)
     }
 
-    return Response.json({
-      username: customDomain.user.username
-    });
+    const data = await response.json()
+    
+    if (!data.username) {
+      return new NextResponse('Domain not configured', { 
+        status: 404,
+        headers: { 'Content-Type': 'text/plain' }
+      })
+    }
+
+    // Rewrite to user's page
+    const url = request.nextUrl.clone()
+    url.pathname = `/${data.username}${request.nextUrl.pathname}`
+    
+    console.log('[Middleware] Rewriting to:', {
+      domain: normalizedHost,
+      username: data.username,
+      path: url.pathname
+    })
+
+    return NextResponse.rewrite(url)
 
   } catch (error) {
-    console.error('[Domain Verify] Error:', {
-      error,
-      stack: error instanceof Error ? error.stack : undefined,
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-
-    return Response.json({ 
-      error: 'Verification failed',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+    console.error('[Middleware] Error:', error)
+    return new NextResponse('Internal Server Error', { 
+      status: 500,
+      headers: { 'Content-Type': 'text/plain' }
+    })
   }
+}
+
+// Configure middleware matches
+export const config = {
+  matcher: ['/((?!api/|_next/|images/|favicon.ico).*)'],
 }
