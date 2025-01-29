@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
  
-// This function can be marked `async` if using `await` inside
 export async function middleware(request: NextRequest) {
   // Get hostname (e.g. links.simstest.xyz)
   const hostname = request.headers.get('host') || ''
@@ -13,6 +12,11 @@ export async function middleware(request: NextRequest) {
       request.nextUrl.pathname.startsWith('/images') ||
       request.nextUrl.pathname.startsWith('/fonts') ||
       request.nextUrl.pathname.startsWith('/favicon.ico')) {
+    return NextResponse.next()
+  }
+
+  // Skip IP addresses
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(normalizedHost)) {
     return NextResponse.next()
   }
 
@@ -30,7 +34,12 @@ export async function middleware(request: NextRequest) {
       method: request.method
     })
 
-    const verifyUrl = new URL('/api/domains/verify', request.nextUrl.origin)
+    // Always use https://tiny.pm for verification in production
+    const baseUrl = process.env.NODE_ENV === 'production' 
+      ? 'https://tiny.pm'
+      : request.nextUrl.origin
+    
+    const verifyUrl = new URL('/api/domains/verify', baseUrl)
     verifyUrl.searchParams.set('domain', normalizedHost)
     
     console.log('[Middleware] Verifying domain:', {
@@ -41,7 +50,7 @@ export async function middleware(request: NextRequest) {
     // Fetch the verification endpoint
     const response = await fetch(verifyUrl, {
       headers: {
-        'host': normalizedHost,
+        'host': 'tiny.pm', // Always use the main domain
         'x-real-ip': request.headers.get('x-real-ip') || '',
         'x-forwarded-for': request.headers.get('x-forwarded-for') || '',
         'x-forwarded-proto': request.headers.get('x-forwarded-proto') || 'http',
