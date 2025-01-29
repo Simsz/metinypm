@@ -1,6 +1,17 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+function isCustomDomain(hostname: string): boolean {
+  const normalizedHost = hostname.split(':')[0].toLowerCase()
+  return !(
+    normalizedHost === 'tiny.pm' || 
+    normalizedHost.endsWith('.tiny.pm') ||
+    normalizedHost === 'localhost' ||
+    normalizedHost.includes('192.') ||
+    normalizedHost.includes('127.0.0.1')
+  )
+}
+
 function rewriteToMainDomain(request: NextRequest, username: string | null = null) {
   const url = request.nextUrl.clone()
   
@@ -16,21 +27,21 @@ function rewriteToMainDomain(request: NextRequest, username: string | null = nul
     url.pathname = `/${username}${url.pathname}`
   }
 
-  const response = NextResponse.rewrite(url)
-  
-  // Add headers to ensure assets are loaded from the main domain
-  response.headers.set('X-Frame-Options', 'SAMEORIGIN')
-  response.headers.set('Content-Security-Policy', "default-src 'self' https://tiny.pm; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://tiny.pm; style-src 'self' 'unsafe-inline' https://tiny.pm; font-src 'self' https://tiny.pm; img-src 'self' data: https://tiny.pm;")
-
-  return response
+  return NextResponse.rewrite(url)
 }
  
 export async function middleware(request: NextRequest) {
   // Get hostname (e.g. links.simstest.xyz)
   const hostname = request.headers.get('host') || ''
+  
+  // Only proceed if this is a custom domain
+  if (!isCustomDomain(hostname)) {
+    return NextResponse.next()
+  }
+
   const normalizedHost = hostname.split(':')[0].toLowerCase()
 
-  // Handle static assets first
+  // Handle static assets for custom domains
   if (request.nextUrl.pathname.startsWith('/_next') ||
       request.nextUrl.pathname.startsWith('/images') ||
       request.nextUrl.pathname.startsWith('/fonts')) {
@@ -40,16 +51,6 @@ export async function middleware(request: NextRequest) {
   // Skip middleware for api routes, etc
   if (request.nextUrl.pathname.startsWith('/api') || 
       request.nextUrl.pathname.startsWith('/favicon.ico')) {
-    return NextResponse.next()
-  }
-
-  // Skip IP addresses
-  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(normalizedHost)) {
-    return NextResponse.next()
-  }
-
-  // Handle root domain and subdomains
-  if (normalizedHost === 'tiny.pm' || normalizedHost.endsWith('.tiny.pm')) {
     return NextResponse.next()
   }
 
