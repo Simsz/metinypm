@@ -1,16 +1,44 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+
+function rewriteToMainDomain(request: NextRequest, username: string | null = null) {
+  const url = request.nextUrl.clone()
+  
+  // If it's a static asset, rewrite to the main domain
+  if (url.pathname.startsWith('/_next')) {
+    url.protocol = 'https'
+    url.host = 'tiny.pm'
+    return NextResponse.rewrite(url)
+  }
+
+  // For other requests, rewrite to the user's path if username is provided
+  if (username) {
+    url.pathname = `/${username}${url.pathname}`
+  }
+
+  const response = NextResponse.rewrite(url)
+  
+  // Add headers to ensure assets are loaded from the main domain
+  response.headers.set('X-Frame-Options', 'SAMEORIGIN')
+  response.headers.set('Content-Security-Policy', "default-src 'self' https://tiny.pm; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://tiny.pm; style-src 'self' 'unsafe-inline' https://tiny.pm; font-src 'self' https://tiny.pm; img-src 'self' data: https://tiny.pm;")
+
+  return response
+}
  
 export async function middleware(request: NextRequest) {
   // Get hostname (e.g. links.simstest.xyz)
   const hostname = request.headers.get('host') || ''
   const normalizedHost = hostname.split(':')[0].toLowerCase()
 
-  // Skip middleware for static files, api routes, etc
-  if (request.nextUrl.pathname.startsWith('/api') || 
-      request.nextUrl.pathname.startsWith('/_next') ||
+  // Handle static assets first
+  if (request.nextUrl.pathname.startsWith('/_next') ||
       request.nextUrl.pathname.startsWith('/images') ||
-      request.nextUrl.pathname.startsWith('/fonts') ||
+      request.nextUrl.pathname.startsWith('/fonts')) {
+    return rewriteToMainDomain(request)
+  }
+
+  // Skip middleware for api routes, etc
+  if (request.nextUrl.pathname.startsWith('/api') || 
       request.nextUrl.pathname.startsWith('/favicon.ico')) {
     return NextResponse.next()
   }
@@ -50,7 +78,7 @@ export async function middleware(request: NextRequest) {
     // Fetch the verification endpoint
     const response = await fetch(verifyUrl, {
       headers: {
-        'host': 'tiny.pm', // Always use the main domain
+        'host': 'tiny.pm',
         'x-real-ip': request.headers.get('x-real-ip') || '',
         'x-forwarded-for': request.headers.get('x-forwarded-for') || '',
         'x-forwarded-proto': request.headers.get('x-forwarded-proto') || 'http',
@@ -83,17 +111,13 @@ export async function middleware(request: NextRequest) {
       })
     }
 
-    // Rewrite to user's page
-    const url = request.nextUrl.clone()
-    url.pathname = `/${data.username}${request.nextUrl.pathname}`
-    
     console.log('[Middleware] Rewriting to:', {
       domain: normalizedHost,
       username: data.username,
-      path: url.pathname
+      path: `/${data.username}${request.nextUrl.pathname}`
     })
 
-    return NextResponse.rewrite(url)
+    return rewriteToMainDomain(request, data.username)
 
   } catch (error) {
     console.error('[Middleware] Error:', error)
@@ -104,7 +128,7 @@ export async function middleware(request: NextRequest) {
   }
 }
 
-// Configure middleware matches
+// Configure middleware matches (include _next now)
 export const config = {
-  matcher: ['/((?!api/|_next/|images/|favicon.ico).*)'],
+  matcher: ['/((?!api/|favicon.ico).*)']
 }
