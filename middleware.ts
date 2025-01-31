@@ -151,7 +151,12 @@ export async function middleware(request: NextRequest) {
     rewriteResponse.headers.set('X-Frame-Options', 'SAMEORIGIN')
     rewriteResponse.headers.set(
       'Content-Security-Policy',
-      "default-src 'self' https://tiny.pm; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://tiny.pm; style-src 'self' 'unsafe-inline' https://tiny.pm; font-src 'self' https://tiny.pm; img-src 'self' data: https://tiny.pm https://*.googleusercontent.com https://avatars.githubusercontent.com;"
+      `default-src 'self' https://tiny.pm ${normalizedHost};
+       script-src 'self' 'unsafe-inline' 'unsafe-eval' https://tiny.pm ${normalizedHost};
+       style-src 'self' 'unsafe-inline' https://tiny.pm ${normalizedHost};
+       font-src 'self' data: https://tiny.pm ${normalizedHost};
+       img-src 'self' data: https://tiny.pm https://*.googleusercontent.com https://avatars.githubusercontent.com ${normalizedHost};
+       connect-src 'self' https://tiny.pm ${normalizedHost}`
     )
 
     return rewriteResponse

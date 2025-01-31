@@ -8,7 +8,6 @@ const nextConfig = {
     //ignoreBuildErrors: true,
   },
   reactStrictMode: true,
-  assetPrefix: process.env.NODE_ENV === 'production' ? 'https://{host}' : '',
   images: {
     remotePatterns: [
       {
@@ -47,10 +46,24 @@ const nextConfig = {
             key: 'Access-Control-Allow-Origin',
             value: '*'
           },
-          // Add X-Content-Type-Options header
           {
             key: 'X-Content-Type-Options',
             value: 'nosniff'
+          },
+          // Update CSP to be more permissive for custom domains
+          {
+            key: 'Content-Security-Policy',
+            value: `
+              default-src 'self';
+              script-src 'self' 'unsafe-inline' 'unsafe-eval';
+              style-src 'self' 'unsafe-inline';
+              font-src 'self' data:;
+              img-src 'self' data: https: *;
+              connect-src 'self' https:;
+              frame-src 'self';
+              base-uri 'self';
+              form-action 'self'
+            `.replace(/\s+/g, ' ').trim()
           }
         ],
       },
@@ -64,11 +77,6 @@ const nextConfig = {
           {
             key: 'Cache-Control',
             value: 'public, max-age=31536000, immutable'
-          },
-          // Add content security policy for static assets
-          {
-            key: 'Content-Security-Policy',
-            value: "default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';"
           }
         ],
       }
