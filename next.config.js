@@ -69,10 +69,39 @@ const nextConfig = {
             value: '*'
           },
           {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable'
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET, OPTIONS'
+          },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value: '*'
+          },
+          {
+            key: 'Cross-Origin-Resource-Policy',
+            value: 'cross-origin'
           }
         ],
+      },
+      {
+        source: '/images/:path*',
+        headers: [
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*'
+          },
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET, OPTIONS'
+          },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value: '*'
+          },
+          {
+            key: 'Cross-Origin-Resource-Policy',
+            value: 'cross-origin'
+          }
+        ]
       }
     ];
   },
