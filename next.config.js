@@ -8,6 +8,7 @@ const nextConfig = {
     //ignoreBuildErrors: true,
   },
   reactStrictMode: true,
+  assetPrefix: process.env.NODE_ENV === 'production' ? 'https://{host}' : '',
   images: {
     remotePatterns: [
       {
@@ -45,11 +46,15 @@ const nextConfig = {
           {
             key: 'Access-Control-Allow-Origin',
             value: '*'
+          },
+          // Add X-Content-Type-Options header
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff'
           }
         ],
       },
       {
-        // Special headers for static assets
         source: '/_next/:path*',
         headers: [
           {
@@ -59,6 +64,11 @@ const nextConfig = {
           {
             key: 'Cache-Control',
             value: 'public, max-age=31536000, immutable'
+          },
+          // Add content security policy for static assets
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';"
           }
         ],
       }
