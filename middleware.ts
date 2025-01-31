@@ -59,12 +59,12 @@ export async function middleware(request: NextRequest) {
 
   const normalizedHost = hostname.split(':')[0].toLowerCase();
 
-  // For static assets on custom domains, redirect to tiny.pm
+  // For static assets, redirect to tiny.pm
   if (request.nextUrl.pathname.startsWith('/_next') || 
       request.nextUrl.pathname.startsWith('/images/')) {
     const url = new URL(request.url);
-    url.protocol = 'https';
     url.host = 'tiny.pm';
+    url.protocol = 'https';
     return NextResponse.rewrite(url);
   }
 

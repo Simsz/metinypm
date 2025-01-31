@@ -33,6 +33,9 @@ const nextConfig = {
   // Add crossOrigin configuration
   crossOrigin: 'anonymous',
   
+  // Add assetPrefix for production
+  assetPrefix: process.env.NODE_ENV === 'production' ? 'https://tiny.pm' : undefined,
+  
   async headers() {
     return [
       {
@@ -54,16 +57,7 @@ const nextConfig = {
           {
             key: 'Content-Security-Policy',
             value: `
-              default-src 'self';
-              script-src 'self' 'unsafe-inline' 'unsafe-eval';
-              style-src 'self' 'unsafe-inline';
-              font-src 'self' data:;
-              img-src 'self' data: https: *;
-              connect-src 'self' https:;
-              frame-src 'self';
-              base-uri 'self';
-              form-action 'self'
-            `.replace(/\s+/g, ' ').trim()
+              default-src 'self' https://tiny.pm; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://tiny.pm; style-src 'self' 'unsafe-inline' https://tiny.pm; font-src 'self' data: https://tiny.pm; img-src 'self' data: https://tiny.pm https://*.googleusercontent.com https://avatars.githubusercontent.com; connect-src 'self' https://tiny.pm`.replace(/\s+/g, ' ').trim()
           }
         ],
       },
@@ -88,24 +82,10 @@ const nextConfig = {
       beforeFiles: [
         {
           source: '/_next/:path*',
-          has: [
-            {
-              type: 'header',
-              key: 'host',
-              value: '(?!tiny\\.pm).*'
-            }
-          ],
           destination: 'https://tiny.pm/_next/:path*'
         },
         {
           source: '/images/:path*',
-          has: [
-            {
-              type: 'header',
-              key: 'host',
-              value: '(?!tiny\\.pm).*'
-            }
-          ],
           destination: 'https://tiny.pm/images/:path*'
         }
       ]
