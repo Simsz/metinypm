@@ -82,6 +82,35 @@ const nextConfig = {
       }
     ];
   },
+  // Add assetPrefix configuration
+  async rewrites() {
+    return {
+      beforeFiles: [
+        {
+          source: '/_next/:path*',
+          has: [
+            {
+              type: 'header',
+              key: 'host',
+              value: '(?!tiny\\.pm).*'
+            }
+          ],
+          destination: 'https://tiny.pm/_next/:path*'
+        },
+        {
+          source: '/images/:path*',
+          has: [
+            {
+              type: 'header',
+              key: 'host',
+              value: '(?!tiny\\.pm).*'
+            }
+          ],
+          destination: 'https://tiny.pm/images/:path*'
+        }
+      ]
+    };
+  }
 };
 
 module.exports = nextConfig;

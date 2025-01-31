@@ -50,28 +50,28 @@ function getAssetType(pathname: string): string {
 }
 
 export async function middleware(request: NextRequest) {
-  // Get hostname (e.g. links.simstest.xyz)
-  const hostname = request.headers.get('host') || ''
+  const hostname = request.headers.get('host') || '';
   
   // Only proceed if this is a custom domain
   if (!isCustomDomain(hostname)) {
-    return NextResponse.next()
+    return NextResponse.next();
   }
 
-  const normalizedHost = hostname.split(':')[0].toLowerCase()
+  const normalizedHost = hostname.split(':')[0].toLowerCase();
 
   // For static assets on custom domains, redirect to tiny.pm
-  if (request.nextUrl.pathname.startsWith('/_next')) {
-    const url = new URL(request.url)
-    url.protocol = 'https'
-    url.host = 'tiny.pm'
-    return NextResponse.redirect(url)
+  if (request.nextUrl.pathname.startsWith('/_next') || 
+      request.nextUrl.pathname.startsWith('/images/')) {
+    const url = new URL(request.url);
+    url.protocol = 'https';
+    url.host = 'tiny.pm';
+    return NextResponse.rewrite(url);
   }
 
   // Skip middleware for api routes, etc
   if (request.nextUrl.pathname.startsWith('/api') || 
       request.nextUrl.pathname.startsWith('/favicon.ico')) {
-    return NextResponse.next()
+    return NextResponse.next();
   }
 
   // For custom domains, verify and rewrite
@@ -139,33 +139,31 @@ export async function middleware(request: NextRequest) {
     })
 
     // Create base response
-    const url = request.nextUrl.clone()
-    url.pathname = `/${data.username}${request.nextUrl.pathname}`
+    const url = request.nextUrl.clone();
+    url.pathname = `/${data.username}${request.nextUrl.pathname}`;
     
-    const rewriteResponse = NextResponse.rewrite(url)
+    const rewriteResponse = NextResponse.rewrite(url);
     
     // Add header to ensure assets are loaded from tiny.pm
-    rewriteResponse.headers.set('X-Use-Asset-Prefix', 'https://tiny.pm')
+    rewriteResponse.headers.set('X-Asset-Prefix', 'https://tiny.pm');
     
-    // Add security headers
-    rewriteResponse.headers.set('X-Frame-Options', 'SAMEORIGIN')
+    // Add security headers (simplified CSP that points to tiny.pm)
     rewriteResponse.headers.set(
       'Content-Security-Policy',
       "default-src 'self' https://tiny.pm; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://tiny.pm; style-src 'self' 'unsafe-inline' https://tiny.pm; font-src 'self' data: https://tiny.pm; img-src 'self' data: https://tiny.pm https://*.googleusercontent.com https://avatars.githubusercontent.com; connect-src 'self' https://tiny.pm"
-    )
+    );
 
-    return rewriteResponse
-
+    return rewriteResponse;
   } catch (error) {
-    console.error('[Middleware] Error:', error)
+    console.error('[Middleware] Error:', error);
     return new NextResponse('Internal Server Error', { 
       status: 500,
       headers: { 'Content-Type': 'text/plain' }
-    })
+    });
   }
 }
 
-// Configure middleware matches
+// Update config to include static assets
 export const config = {
   matcher: [
     /*
@@ -176,5 +174,8 @@ export const config = {
      * - favicon.ico (favicon file)
      */
     '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    // Add matcher for static assets that should be rewritten
+    '/_next/static/:path*',
+    '/images/:path*'
   ],
-}
+};
