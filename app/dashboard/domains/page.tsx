@@ -449,7 +449,7 @@ export default function DomainsPage() {
               </div>
 
               <p className="mt-4 text-sm text-gray-600">
-                <strong>Note:</strong> If you're using Cloudflare, make sure to set the proxy status to "DNS only" (grey cloud) rather than "Proxied" (orange cloud).
+                <strong>Note:</strong> If you&apos;re using Cloudflare, make sure to set the proxy status to &quot;DNS only&quot; (grey cloud) rather than &quot;Proxied&quot; (orange cloud).
               </p>
             </div>
           )}
