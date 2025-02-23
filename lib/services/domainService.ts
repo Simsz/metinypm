@@ -102,9 +102,10 @@ export class DomainService {
       // Verify CNAME record
       const records = await dns.resolveCname(domain.domain);
       
-      if (!records.includes(domain.cnameTarget)) {
+      const validTargets = ['tiny.pm', 'origin.tiny.pm'];
+      if (!records.some(record => validTargets.includes(record))) {
         throw new DomainVerificationError(
-          `CNAME record should point to ${domain.cnameTarget}`,
+          `CNAME record should point to either tiny.pm or origin.tiny.pm`,
           'INVALID_CNAME'
         );
       }

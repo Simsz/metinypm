@@ -1,0 +1,22 @@
+# Existing code...
+{
+    # If you have any global options, keep them
+}
+
+# Main host block that handles tiny.pm and origin.tiny.pm
+tiny.pm, origin.tiny.pm {
+    # Your existing configuration
+    reverse_proxy localhost:3000
+}
+
+# Handle all other domains that might point to your server
+:443 {
+    # This block handles all HTTPS requests for other domains
+    tls {
+        # Enable on-demand TLS for custom domains
+        on_demand
+    }
+    
+    reverse_proxy localhost:3000
+}
+# Existing code... 

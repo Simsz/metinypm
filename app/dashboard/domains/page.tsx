@@ -407,6 +407,15 @@ export default function DomainsPage() {
                 To connect your domain, add the following DNS record to your domain provider.
                 This process typically takes 5-30 minutes to complete after adding the record.
               </p>
+
+              {/* Special instructions for Cloudflare users */}
+              <div className="mb-4 rounded-lg border-2 border-amber-200 bg-amber-50 p-4">
+                <h4 className="mb-2 font-medium text-amber-800">Important Note for Cloudflare Users</h4>
+                <p className="text-sm text-amber-700">
+                  If your domain is on Cloudflare, you must use <span className="font-mono">origin.tiny.pm</span> as the CNAME target instead of <span className="font-mono">tiny.pm</span>. This is because Cloudflare does not allow CNAME flattening between different Cloudflare accounts.
+                </p>
+              </div>
+
               <div className="overflow-x-auto rounded-lg border border-gray-200">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50">
@@ -414,6 +423,7 @@ export default function DomainsPage() {
                       <th className="px-4 py-2 text-left">Type</th>
                       <th className="px-4 py-2 text-left">Name</th>
                       <th className="px-4 py-2 text-left">Value</th>
+                      <th className="px-4 py-2 text-left">Notes</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -423,13 +433,24 @@ export default function DomainsPage() {
                         <tr key={domain.id} className="border-t border-gray-200">
                           <td className="px-4 py-2 font-mono">{instructions.type}</td>
                           <td className="px-4 py-2 font-mono">{instructions.name}</td>
-                          <td className="px-4 py-2 font-mono">{instructions.value}</td>
+                          <td className="px-4 py-2 font-mono">
+                            <div>tiny.pm</div>
+                            <div className="text-amber-600">or</div>
+                            <div>origin.tiny.pm <span className="font-normal text-amber-600">(for Cloudflare)</span></div>
+                          </td>
+                          <td className="px-4 py-2 text-gray-600">
+                            {instructions.name === '@' ? 'Root domain' : 'Subdomain'}
+                          </td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
               </div>
+
+              <p className="mt-4 text-sm text-gray-600">
+                <strong>Note:</strong> If you're using Cloudflare, make sure to set the proxy status to "DNS only" (grey cloud) rather than "Proxied" (orange cloud).
+              </p>
             </div>
           )}
         </div>

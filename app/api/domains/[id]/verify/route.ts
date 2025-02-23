@@ -26,11 +26,14 @@ async function verifyDnsRecords(domain: string, expectedTarget: string) {
     console.log('[DNS Verification] Using nameservers:', nameservers);
 
     const records = await dns.resolveCname(domain);
+    const validTargets = ['tiny.pm', 'origin.tiny.pm'];
+    const matches = records.some(record => validTargets.includes(record));
+
     console.log('[DNS Verification] Resolved CNAME records:', {
       domain,
       records,
-      expectedTarget,
-      matches: records.includes(expectedTarget),
+      validTargets,
+      matches,
     });
 
     return records;
@@ -56,7 +59,7 @@ function isDnsError(error: unknown): error is NodeJS.ErrnoException {
 
 function formatDnsError(error: NodeJS.ErrnoException): string {
   const errorMessages: Record<string, string> = {
-    ENODATA: 'No DNS records found. Please ensure you have added the CNAME record.',
+    ENODATA: 'No DNS records found. Please ensure you have added the CNAME record pointing to either tiny.pm or origin.tiny.pm.',
     ENOTFOUND: 'Domain not found. Please check if the domain exists and try again.',
     ETIMEOUT: 'DNS lookup timed out. Please try again in a few minutes.',
     ESERVFAIL: 'DNS server error. Please check your DNS configuration.',
