@@ -33,6 +33,9 @@ const nextConfig = {
   // Add crossOrigin configuration
   crossOrigin: 'anonymous',
   
+  // Add assetPrefix configuration based on hostname
+  assetPrefix: process.env.NODE_ENV === 'production' ? 'https://tiny.pm' : '',
+  
   async headers() {
     return [
       {
